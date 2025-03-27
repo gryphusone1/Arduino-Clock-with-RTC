@@ -1,0 +1,9 @@
+.DS_Store
+*.elf
+*.hex
+*.bin
+*.o
+*.d
+*.eep
+*.map
+build/
