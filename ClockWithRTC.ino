@@ -8,8 +8,8 @@ hd44780_I2Cexp lcd;
 RTC_DS3231 rtc;
 
 // LCD dimensions
-const int LCD_COLS = 16;
-const int LCD_ROWS = 2;
+const int LCD_COLS = 20;
+const int LCD_ROWS = 4;
 
 // Days of the week
 String daysOfWeek[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -66,10 +66,10 @@ void updateDisplay() {
   DateTime now = rtc.now();
   
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(4, 2);
   lcd.print(daysOfWeek[now.dayOfTheWeek()]); // Get day of the week
   
-  lcd.setCursor(0, 1);
+  lcd.setCursor(1, 1);
   lcd.print(now.year(), DEC);
   lcd.print("-");
   lcd.print(now.month(), DEC);
