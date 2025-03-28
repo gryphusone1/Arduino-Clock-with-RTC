@@ -26,13 +26,20 @@ WiFiUDP udp;
 NTPClient timeClient(udp, "pool.ntp.org", 0, 60000); // UTC+0 offset, update every 60 seconds
 
 // Timezone map for major cities
-// Format: City -> (Standard Time Offset in seconds, DST Offset in seconds)
 const String cities[] = {"New York", "Los Angeles", "London", "Tokyo", "Berlin"};
 const long offsets[] = {-5, -8, 0, 9, 1};  // Standard Time offsets in hours
 const long dstOffsets[] = {-4, -7, 0, 9, 2}; // DST offsets in hours
 
-long timeZoneOffset = 0; // Default UTC offset (will be updated based on input)
-bool isDST = false; // DST status flag
+// Default settings: New York, UTC -4 (DST enabled)
+String currentCity = "New York";
+long timeZoneOffset = -4 * 3600; 
+bool isDST = true;
+
+// Scrolling text variables
+String scrollText = " Clock ";
+int scrollPos = 0;
+unsigned long lastScrollTime = 0;
+const int scrollDelay = 300; // Scroll speed (milliseconds)
 
 void setup() {
   Serial.begin(9600);
@@ -54,7 +61,7 @@ void setup() {
   
   // Initialize NTPClient
   timeClient.begin();
-  timeClient.setTimeOffset(timeZoneOffset);  // Set time zone offset here
+  timeClient.setTimeOffset(timeZoneOffset);  // Set default timezone
 
   // Initialize RTC
   if (!rtc.begin()) {
@@ -68,58 +75,68 @@ void setup() {
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); // Sets RTC to compilation time
   }
 
-  Serial.println("Enter your city for time zone:");
-  for (int i = 0; i < sizeof(cities) / sizeof(cities[0]); i++) {
-    Serial.print(i + 1);
-    Serial.print(": ");
-    Serial.println(cities[i]);
-  }
+  Serial.println("Do you want to update time settings? (yes/no)");
 }
 
 void loop() {
-  // Get city name from Serial Monitor and update timezone
+  // Check if user wants to update settings
   if (Serial.available() > 0) {
-    String input = Serial.readString();
-    input.trim();  // Remove leading/trailing spaces
+    String response = Serial.readString();
+    response.trim(); // Remove spaces
 
-    // Check for matching city
-    bool cityFound = false;
-    for (int i = 0; i < sizeof(cities) / sizeof(cities[0]); i++) {
-      if (input.equalsIgnoreCase(cities[i])) {
-        cityFound = true;
-        timeZoneOffset = offsets[i] * 3600; // Convert hours to seconds
-        
-        // Ask if DST should be enabled
-        Serial.println("Do you want to enable DST? (yes/no):");
-        while (Serial.available() == 0) {} // Wait for input
-        String dstInput = Serial.readString();
-        dstInput.trim();
-        
-        if (dstInput.equalsIgnoreCase("yes")) {
-          isDST = true;
-          timeZoneOffset = dstOffsets[i] * 3600; // Update to DST offset
-          Serial.println("DST enabled.");
-        } else {
-          isDST = false;
-          Serial.println("DST disabled.");
-        }
-        
-        timeClient.setTimeOffset(timeZoneOffset);  // Update NTP client with new offset
-        Serial.print("Timezone set to: ");
-        Serial.print(cities[i]);
-        Serial.print(" (UTC");
-        Serial.print(offsets[i]);
-        if (isDST) {
-          Serial.print(" DST");
-        }
-        Serial.println(")");
-        break;
+    if (response.equalsIgnoreCase("yes")) {
+      Serial.println("Enter your city for time zone:");
+      for (int i = 0; i < sizeof(cities) / sizeof(cities[0]); i++) {
+        Serial.print(i + 1);
+        Serial.print(": ");
+        Serial.println(cities[i]);
       }
-    }
 
-    // If city not found, ask for valid city
-    if (!cityFound) {
-      Serial.println("City not recognized. Please enter a valid city.");
+      // Wait for city input
+      while (Serial.available() == 0) {}
+      String input = Serial.readString();
+      input.trim();
+
+      // Check for valid city
+      bool cityFound = false;
+      for (int i = 0; i < sizeof(cities) / sizeof(cities[0]); i++) {
+        if (input.equalsIgnoreCase(cities[i])) {
+          cityFound = true;
+          currentCity = cities[i];
+          timeZoneOffset = offsets[i] * 3600; // Convert hours to seconds
+
+          // Ask for DST
+          Serial.println("Do you want to enable DST? (yes/no):");
+          while (Serial.available() == 0) {}
+          String dstInput = Serial.readString();
+          dstInput.trim();
+
+          if (dstInput.equalsIgnoreCase("yes")) {
+            isDST = true;
+            timeZoneOffset = dstOffsets[i] * 3600;
+            Serial.println("DST enabled.");
+          } else {
+            isDST = false;
+            Serial.println("DST disabled.");
+          }
+
+          timeClient.setTimeOffset(timeZoneOffset); // Update NTP client
+          Serial.print("Timezone set to: ");
+          Serial.print(currentCity);
+          Serial.print(" (UTC");
+          Serial.print(offsets[i]);
+          if (isDST) Serial.print(" DST");
+          Serial.println(")");
+          break;
+        }
+      }
+
+      // If city is not recognized
+      if (!cityFound) {
+        Serial.println("City not recognized. Please enter a valid city.");
+      }
+    } else {
+      Serial.println("Settings remain unchanged.");
     }
   }
 
@@ -129,12 +146,8 @@ void loop() {
   // Get the current epoch time
   unsigned long epochTime = timeClient.getEpochTime();
 
-  // Print the epoch time to check the output
-  //Serial.print("Epoch Time: ");
-  //Serial.println(epochTime);
-
   // Convert epoch time to RTC DateTime
-  DateTime now(epochTime); // This converts the epoch time to DateTime format
+  DateTime now(epochTime); 
 
   // Adjust RTC with the correct time
   rtc.adjust(now);
@@ -142,17 +155,32 @@ void loop() {
   // Update the display with the new time
   updateDisplay();
 
+  // Scroll "Clock" on first line
+  scrollClockText();
+
   delay(1000);
+}
+
+// Function to scroll "Clock" across first line
+void scrollClockText() {
+  if (millis() - lastScrollTime > scrollDelay) {
+    lastScrollTime = millis();
+    
+    lcd.setCursor(0, 0);
+    for (int i = 0; i < LCD_COLS; i++) {
+      int index = (scrollPos + i) % scrollText.length();
+      lcd.print(scrollText[index]);
+    }
+    
+    scrollPos = (scrollPos + 1) % scrollText.length();
+  }
 }
 
 // Function to display time on the LCD
 void updateDisplay() {
   DateTime now = rtc.now();
-  
-  lcd.clear();
-  lcd.setCursor(4, 2);
-  lcd.print(daysOfWeek[now.dayOfTheWeek()]); // Get day of the week
-  
+
+  // Line 2: Date
   lcd.setCursor(1, 1);
   lcd.print(now.year(), DEC);
   lcd.print("-");
@@ -171,4 +199,16 @@ void updateDisplay() {
   
   if (now.second() < 10) lcd.print("0");
   lcd.print(now.second(), DEC);
+
+  // Line 3: Day of the week
+  lcd.setCursor(4, 2);
+  lcd.print(daysOfWeek[now.dayOfTheWeek()]);
+
+  // Line 4: NTP Status
+  lcd.setCursor(0, 3);
+  if (WiFi.status() == WL_CONNECTED) {
+    lcd.print("NTP Connected  ");
+  } else {
+    lcd.print("NTP Disconnected");
+  }
 }
